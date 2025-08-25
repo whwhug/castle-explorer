@@ -5,9 +5,29 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, Home, Info, X } from "lucide-react";
 
 /** ——— Types ——— */
+type GoTo = "autoNext" | "home" | number | string;
+
 export type CTA = {
   label: string;
-  goTo: "autoNext" | "home" | number | string; // index or clipId or special
+  goTo: GoTo; // index or clipId or special
+};
+
+type Box = { top: string; left: string; width: string; height: string };
+
+type HotspotKF = { t: number; box: Box };
+
+export type Hotspot = {
+  // percentages relative to video viewport; simple rectangular areas OR animated path
+  leftPct?: number;
+  topPct?: number;
+  widthPct?: number;
+  heightPct?: number;
+  start?: number; // seconds from start when the hotspot becomes active
+  end?: number; // seconds when it disappears
+  goTo: GoTo; // target clip id or index
+  label?: string; // accessible label
+  aria?: string; // optional explicit aria label
+  path?: HotspotKF[]; // optional keyframed box path over time
 };
 
 export type Clip = {
@@ -16,19 +36,9 @@ export type Clip = {
   src: string; // MP4 or HLS
   poster?: string;
   prompt?: string; // optional
-  ctas?: CTA[];    // optional
+  ctas?: CTA[]; // optional
   facts?: string[]; // optional – informational bullets
-  hotspots?: {
-    // percentages relative to video viewport; simple rectangular areas
-    leftPct: number;
-    topPct: number;
-    widthPct: number;
-    heightPct: number;
-    start?: number; // seconds from start when the hotspot becomes active
-    end?: number;   // seconds when it disappears
-    goTo: string | number; // target clip id or index
-    label?: string; // optional accessible label
-  }[];
+  hotspots?: Hotspot[]; // optional hotspots
   modal?: {
     title: string;
     body: string; // supports \n\n for paragraphs
@@ -58,7 +68,7 @@ export default function CastleExplorerPlayer({
 }) {
   const [index, setIndex] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  const [_playing, setPlaying] = useState(false); // prefixed to satisfy no-unused-vars when not referenced
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [endOverlay, setEndOverlay] = useState(false);
@@ -221,14 +231,14 @@ export default function CastleExplorerPlayer({
         >
           <div className="pointer-events-auto">
             <button
-  onClick={goHome}
-  className="inline-flex items-center gap-2 h-8 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-sm"
-  aria-label="Home"
-  title="Back to start"
->
-  <Home className="h-4 w-4" />
-  <span className="font-medium tracking-tight">{title}</span>
-</button>
+              onClick={goHome}
+              className="inline-flex items-center gap-2 h-8 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-sm"
+              aria-label="Home"
+              title="Back to start"
+            >
+              <Home className="h-4 w-4" />
+              <span className="font-medium tracking-tight">{title}</span>
+            </button>
           </div>
           <div className="pointer-events-auto">
             <Button
@@ -263,25 +273,31 @@ export default function CastleExplorerPlayer({
       />
 
       {/* Clickable hotspots (time-windowed) */}
-      {current?.hotspots?.map((h, i) => {
-        const active =
-          (h.start == null || progress >= h.start) && (h.end == null || progress <= h.end);
+      {current?.hotspots?.map((h: Hotspot, i: number) => {
+        const active = (h.start == null || progress >= h.start) && (h.end == null || progress <= h.end);
         if (!active) return null;
-        const style: React.CSSProperties = {
-          left: `${h.leftPct}%`,
-          top: `${h.topPct}%`,
-          width: `${h.widthPct}%`,
-          height: `${h.heightPct}%`,
-        };
-        return (
-          <button
-            key={i}
-            className="absolute z-30 border-2 border-white/30 hover:border-white/60 rounded-md bg-white/5 transition-colors"
-            style={style}
-            aria-label={h.label || "Hotspot"}
-            onClick={() => handleCta({ label: h.label || "hotspot", goTo: h.goTo as any })}
-          />
-        );
+
+        // If using static percentage rects
+        if (h.leftPct != null && h.topPct != null && h.widthPct != null && h.heightPct != null) {
+          const style: React.CSSProperties = {
+            left: `${h.leftPct}%`,
+            top: `${h.topPct}%`,
+            width: `${h.widthPct}%`,
+            height: `${h.heightPct}%`,
+          };
+          return (
+            <button
+              key={i}
+              className="absolute z-30 border-2 border-white/30 hover:border-white/60 rounded-md bg-white/5 transition-colors"
+              style={style}
+              aria-label={h.aria ?? h.label ?? "Hotspot"}
+              onClick={() => handleCta({ label: h.label ?? "Hotspot", goTo: h.goTo })}
+            />
+          );
+        }
+
+        // (Optional) if using animated path boxes, compute a box from h.path and render similarly.
+        return null;
       })}
 
       {/* Subtle progress line */}
@@ -342,10 +358,10 @@ export default function CastleExplorerPlayer({
                   const isH2 = /^\*\*([\s\S]+)\*\*$/.test(trimmed);
                   const isH3 = /^\*([^*][\s\S]+)\*$/.test(trimmed);
                   if (isH2) {
-                    const title = trimmed.replace(/^\*\*|\*\*$/g, "");
+                    const t = trimmed.replace(/^\*\*|\*\*$/g, "");
                     return (
                       <h2 key={i} className="text-xl font-semibold mb-3 tracking-tight">
-                        {title}
+                        {t}
                       </h2>
                     );
                   }
@@ -391,7 +407,7 @@ export default function CastleExplorerPlayer({
           <div className="bg-black/50 backdrop-blur-md border border-white/10 rounded-2xl p-3">
             <div className="flex flex-col sm:flex-row gap-2 justify-end">
               {(current?.ctas?.length ? current.ctas : [{ label: "Continue", goTo: "autoNext" }]).map(
-                (cta, i) => (
+                (cta: CTA, i: number) => (
                   <Button key={i} size="lg" className="rounded-xl" onClick={() => handleCta(cta)}>
                     {cta.label} <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
