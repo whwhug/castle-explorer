@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Home } from "lucide-react";
+import { ChevronRight, Home, Info, X } from "lucide-react";
 
 /** ——— Types ——— */
 export type CTA = {
@@ -17,6 +17,23 @@ export type Clip = {
   poster?: string;
   prompt?: string; // optional
   ctas?: CTA[];    // optional
+  facts?: string[]; // optional – informational bullets
+  hotspots?: {
+    // percentages relative to video viewport; simple rectangular areas
+    leftPct: number;
+    topPct: number;
+    widthPct: number;
+    heightPct: number;
+    start?: number; // seconds from start when the hotspot becomes active
+    end?: number;   // seconds when it disappears
+    goTo: string | number; // target clip id or index
+    label?: string; // optional accessible label
+  }[];
+  modal?: {
+    title: string;
+    body: string; // supports \n\n for paragraphs
+    linkText: string;
+  };
 };
 
 export type PlayerEvent =
@@ -46,6 +63,8 @@ export default function CastleExplorerPlayer({
   const [duration, setDuration] = useState(0);
   const [endOverlay, setEndOverlay] = useState(false);
   const [barVisible, setBarVisible] = useState(true);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -130,6 +149,19 @@ export default function CastleExplorerPlayer({
     };
   }, [showBar]);
 
+  // Keyboard shortcut for Info drawer
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "i") setInfoOpen((v) => !v);
+      if (e.key === "Escape") {
+        setInfoOpen(false);
+        setModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   /** Controls */
   function play() {
     const v = videoRef.current;
@@ -175,6 +207,7 @@ export default function CastleExplorerPlayer({
   }
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration]);
+  const shouldPulseInfo = !!current?.modal && !infoOpen;
 
   /** ——— Render ——— */
   return (
@@ -197,6 +230,25 @@ export default function CastleExplorerPlayer({
   <span className="font-medium tracking-tight">{title}</span>
 </button>
           </div>
+          <div className="pointer-events-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-8 rounded-xl border-white/10 bg-white/10 hover:bg-white/20 ${
+                shouldPulseInfo ? "animate-pulse bg-amber-300/20 hover:bg-amber-300/30 border-amber-300/50" : ""
+              }`}
+              onClick={() => setInfoOpen((v) => !v)}
+              aria-pressed={infoOpen}
+              aria-label="Toggle info (i)"
+              title="Toggle info (i)"
+            >
+              {infoOpen ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <Info className={`h-4 w-4 ${shouldPulseInfo ? "text-amber-300" : ""}`} />
+              )}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -210,10 +262,112 @@ export default function CastleExplorerPlayer({
         onClick={toggle}
       />
 
+      {/* Clickable hotspots (time-windowed) */}
+      {current?.hotspots?.map((h, i) => {
+        const active =
+          (h.start == null || progress >= h.start) && (h.end == null || progress <= h.end);
+        if (!active) return null;
+        const style: React.CSSProperties = {
+          left: `${h.leftPct}%`,
+          top: `${h.topPct}%`,
+          width: `${h.widthPct}%`,
+          height: `${h.heightPct}%`,
+        };
+        return (
+          <button
+            key={i}
+            className="absolute z-30 border-2 border-white/30 hover:border-white/60 rounded-md bg-white/5 transition-colors"
+            style={style}
+            aria-label={h.label || "Hotspot"}
+            onClick={() => handleCta({ label: h.label || "hotspot", goTo: h.goTo as any })}
+          />
+        );
+      })}
+
       {/* Subtle progress line */}
       <div className="fixed left-0 right-0 bottom-0 h-0.5 bg-white/10">
         <div className="h-full bg-white/80" style={{ width: `${pct}%` }} />
       </div>
+
+      {/* Info panel (right slide-in) */}
+      {current?.facts?.length ? (
+        <div
+          className={`absolute top-14 right-4 z-40 w-80 max-w-[85vw] transition-transform duration-300 ${
+            infoOpen ? "translate-x-0" : "translate-x-4 pointer-events-none opacity-0"
+          }`}
+        >
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-lg">
+            <div className="text-sm font-semibold mb-2">{current.title}</div>
+            <ul className="space-y-2 pr-1">
+              {current.facts.map((f, i) => (
+                <li key={i} className="flex gap-2 text-sm text-white/90">
+                  <span className="text-white/60">•</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+              {current.modal ? (
+                <li className="mt-3">
+                  <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-3">
+                    <div className="text-sm text-amber-200 mb-2">{current.modal.linkText}</div>
+                    <Button
+                      size="sm"
+                      className="rounded-lg h-8 bg-amber-300 text-black hover:bg-amber-200"
+                      onClick={() => setModalOpen(true)}
+                    >
+                      Find out more
+                    </Button>
+                  </div>
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Fullscreen modal for extended reading */}
+      {modalOpen && current?.modal ? (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto">
+          <div className="min-h-dvh p-4 md:p-6">
+            <div className="relative bg-black/60 border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl min-h-[90dvh]">
+              <button
+                className="absolute right-3 top-3 inline-flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10"
+                aria-label="Close"
+                onClick={() => setModalOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="text-white/90">
+                {current.modal.body.split("\n\n").map((block, i) => {
+                  const trimmed = block.trim();
+                  const isH2 = /^\*\*([\s\S]+)\*\*$/.test(trimmed);
+                  const isH3 = /^\*([^*][\s\S]+)\*$/.test(trimmed);
+                  if (isH2) {
+                    const title = trimmed.replace(/^\*\*|\*\*$/g, "");
+                    return (
+                      <h2 key={i} className="text-xl font-semibold mb-3 tracking-tight">
+                        {title}
+                      </h2>
+                    );
+                  }
+                  if (isH3) {
+                    const heading = trimmed.replace(/^\*|\*$/g, "");
+                    return (
+                      <h3 key={i} className="text-sm font-semibold uppercase tracking-wide text-white/80 mt-5 mb-2">
+                        {heading}
+                      </h3>
+                    );
+                  }
+                  return (
+                    <p key={i} className="text-sm leading-relaxed mb-3 whitespace-pre-wrap">
+                      {block}
+                    </p>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Start screen (single click → autoplay allowed) */}
       {!hasStarted && (
