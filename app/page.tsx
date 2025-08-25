@@ -8,7 +8,7 @@ const playlist: Clip[] = [
   { id: "gate-02", title: "Gatehouse Approach", src: "/media/gatehouse.mp4", poster: "/media/gatehouse.jpg",
     ctas: [{ label: "Explore the armoury", goTo: "arm-03" }, { label: "Descend to the dungeon", goTo: "dun-04" }] },
   { id: "arm-03", title: "Armoury Discovery", src: "/media/armoury.mp4", poster: "/media/armoury.jpg",
-    ctas: [{ label: "Continue", goTo: "autoNext" }] },
+    ctas: [{ label: "go to dungeon", goTo: "dun-04" }] },
 { id: "dun-04", title: "Dungeon Descent", src: "/media/dungeon.mp4", poster: "/media/dungeon.jpg",
   ctas: [{ label: "Finish", goTo: "home" }] },
 ];
