@@ -34,7 +34,7 @@ const playlist: Clip[] = [
       "By the late fourteenth century gunpowder weapons such as small bombards were sometimes kept alongside traditional arms.",
     ] },
 { id: "dun-05", title: "Dungeon Passage", src: "/media/dungeon.mp4", poster: "/media/dungeon.jpg",
-  ctas: [{ label: "Finish", goTo: "home" }],
+  ctas: [{ label: "Enter the dungeon", goTo: "inside_dungeon" }],
   facts: [
     "Medieval prison passages were designed to intimidate with darkness, damp air and cramped conditions.",
     "Some castles contained vertical shafts known as oubliettes where prisoners were lowered and abandoned.",
@@ -55,6 +55,10 @@ const playlist: Clip[] = [
       "*The reality of war*\n\n" +
       "This practice meant that nobles often walked into battle with a sense of security unknown to the common soldier. For the rank and file, defeat could mean death. For the noble, defeat could mean a period in captivity, followed by release in exchange for gold.",
   } },
+  { id: "inside_dungeon", title: "Inside the Dungeon", src: "/media/inside_dungeon.mp4",
+    ctas: [{ label: "Enter the prisoners cell", goTo: "autoNext" }] },
+  { id: "dungeon_cell", title: "Dungeon Cell", src: "/media/dungeon_cell.mp4",
+    ctas: [{ label: "Finish", goTo: "home" }] },
 ];
 
 export default function Page() {
